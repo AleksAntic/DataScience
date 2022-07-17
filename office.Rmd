@@ -23,45 +23,30 @@ library(wordcloud)
 library(dplyr)
 library(SnowballC)
 library(scales)
-library("tm")
-library("RColorBrewer")
-#install.packages("syuzhet")
-library("syuzhet")
-#install.packages("reshape2")
+library(tm)
+library(RColorBrewer)
+library(syuzhet)
 library(reshape2)
-#install.packages("textdata")
 library(textdata)
-#install.packages("igraph")
-#install.packages("tidygraph")
-#install.packages("ggraph")
-#install.packages("widyr")
 library(igraph)
 library(tidygraph)
 library(ggraph)
 library(widyr)
 library(topicmodels)
-#install.packages('gganimate')
 library(gganimate)
-#install.packages("schrute")
 library(schrute)
-#install.packages("gghighlight")
 library(plotly)
 library(githubinstall)
 library(gghighlight)
-#library(devtools)
-#install.packages("wordcloud2")
 library(wordcloud2)
-#devtools::install_github('thomasp85/gganimate')
 library(gganimate)
 library(sweary)
-#install.packages("gifski")
 library(gifski)
-#install.packages("magick")
-library("magick")
+library(magick)
 library(webshot)
 library(htmlwidgets)
 library(scales)
-list.files (path = "C:/Users/Aleks/Desktop/uni/data science/the office")
+
 
 ```
 
@@ -69,24 +54,23 @@ list.files (path = "C:/Users/Aleks/Desktop/uni/data science/the office")
 ## Dataset di partenza
 
 Il dataset di partenza viene preso dalla libreria schrute.
-Contiene tutte le linee di dialogo dette nelle 9 stagioni di the Office organizzate per persoanggio ed episodio.
+Contiene tutte le linee di dialogo delle 9 stagioni di the Office organizzate per persoanggio ed episodio.
 Sono presenti anche i ratings ricevuti su IMDB per i vari episodi.  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/the_office_inizio.png)
+![](./images/the_office_inizio.png){width=100%}
  
 ## Che cos'è?
 The Office è una serie televisiva statunitense, è stata girata in una configurazione a telecamera singola – senza il pubblico in studio o le risate registrate – per dare l'idea di un vero documentario.
 La serie è stata acclamata dal pubblico e dalla critica, aggiudicandosi diversi premi.
-The Office segue le vite di ogni giorno dei dipendenti della Dunder Mifflin-Scranton, guidati dal direttore della filiale Michael Scott.  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/Worlds_best_boss.jpg)
+The Office segue le vite di ogni giorno dei dipendenti della Dunder Mifflin-Scranton, guidati dal direttore della filiale Michael Scott e dal suo braccio destro Dwight, il quale pero non e il preferito di Michael che gli preferisce Jim, il quale pero non ha interessi ad impegnarsi nel lavoro e fa il minimo indispensabile passando le giornate a scherzare con la receptionist dell'ufficio Pam (sua gran cotta). Altri personaggi dell'ufficio sono Angela, Kevin, Oscar e Phillis (e tanti altri)
+![](./images/tutti.png)
 
    
-## Cosa vogliamo scoprire?  
-1.Vogliamo vedere ovviamente chi ha piu battute e chi compare piu spesso nello show  
-2.Vogliamo indagare sulle parole piu dette  
-3.Vogliamo scoprire quali sentimenti porta questa serie tramite le parole usate  
-4.Vogliamo trovare il personaggio piu scurrile  
-e molte altre cose...  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/the-office-kevin.jpg)
+## Cosa faremo?  
+1. Troveremo alcune statistiche generali sulla serie
+2. Text mining sui dialoghi
+3. Sentiment analysis sulla serie 
+e molte altre cose...
+![](./images/the-office-kevin.jpg)
 
    
 ## Chi ha piu battute?  
@@ -97,15 +81,34 @@ Transcripts%>%
   count(character, sort = TRUE) %>%
   mutate(character = fct_reorder(character, desc(n)))%>%
    top_n(15) %>%
-  ggplot( aes(x=character, y=n,fill=character)) + 
+  ggplot( aes(x=character, y=n)) + 
   geom_bar(stat = "identity",show.legend = FALSE)+
   coord_flip()
 ```
 Ovviamente __Michael__!  
    
+## Popolarita in relazione ai vari episodi
+  
+```{r ratings, out.height = "100%", out.width = "100%"}
+lol <-Transcripts%>%
+ mutate(ep_key = paste0("s", season, "e", episode)) %>%
+    select(ep_key, episode_name, imdb_rating,season) %>%
+    unique()
+
+p<-ggplot(lol, aes(ep_key, imdb_rating,color=season)) +
+    geom_point() +
+   
+  geom_smooth() +
+
+  scale_colour_gradientn(colours = c("darkred", "orange", "yellow","brown","green","darkblue","purple","pink","blue"))   + 
+  theme(axis.text.x=element_blank(),legend.position = "none")
+
+ggplotly(p)
+```
+Notiamo che dopo meta serie i voti iniziano a calare in media, ma in generale il rating rimane alto
+   
 ## Chi compare in piu episodi?  
 ```{r episodes_with_char, out.height = "100%", out.width = "100%"}
-#summary(Transcripts)
 
 troll <-Transcripts%>%
  mutate(ep_key = paste0("s", season, "e", episode)) %>%
@@ -126,9 +129,9 @@ arrange(n)
   coord_flip()
 ```
 
-Nelle ultime stagioni la mancanza di Michael nel nostro ufficio preferito ha cambiato le carte in tavola  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/prison-mike.jpg)  
-Inoltre notiamo che i personaggio presenti sono quelli del ufficio dalla prima stagione,non potevamo certo aspettarci altro   
+Nelle ultime stagioni la mancanza di Michael nel ufficio ha fatto si che il grafico non ricalcasse quello del numero totale di battute nella serie  
+![](./images/prison-mike.jpg)  
+Inoltre notiamo che i personaggi piu presenti sono quelli del ufficio dalla prima stagione
 
 ## Parole per personaggio  
 ```{r words_for_char, out.height = "100%", out.width = "100%"}
@@ -143,23 +146,18 @@ lines_manip <- Transcripts %>%
 
 lines_sum <- lines_manip %>%
     select(ep_key, character, char_words, ep_words,season,episode) %>%
- # filter(season==1)%>%
     distinct()
 rip<-lines_sum %>% 
   filter(char_words>200)%>%
    filter(character%in% c("Michael","Dwight","Jim","Andy","Angela","Pam","Oscar","Phyllis","Ryan","Kevin","Toby","Derryl","Kelly","Creed","Nellie","Stanley","Meredith","Gabe","Jo","Deangelo","Clark","Pete","todd","david","Jan"))%>%
- # filter(season==2 )%>%
     distinct()
 
-
- 
-# stacked barchart
 c<-ggplot(rip, aes(fill=character, y=char_words, x= episode)) + 
     geom_bar(position="stack", stat="identity")+
    facet_wrap(~season, ncol = 3, scales = "free_x")
 ggplotly(c)
 ```
-Come vediamo __Michael__ e quello piu presente in tutti gli episodi tranne che per le ultime 2 stagioni dove fa solo da comparsa  
+Come vediamo __Michael__ e quello piu presente in tutti gli episodi tranne che per le ultime 2 stagioni dove fa solo da comparsa, questo spiega sia come mai e colui con piu linee di dialogo e sia perche non e il personaggio presente in piu episodi
 ```{r Tokenizing, out.height = "100%", out.width = "100%", include=FALSE}
 Tokenized <- Transcripts %>%
   unnest_tokens(word, text)
@@ -170,18 +168,18 @@ Tokenized <- Tokenized %>%
    
 ## Parole piu dette  
 ```{r most_used_words, out.height = "100%", out.width = "100%"}
-# plot word frequency
 n<-Tokenized %>%
   count(word, sort = TRUE) %>%
   filter(n > 600) %>%
-  # reorder levels of factor word wrt n
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(word, n, fill = word)) +
    geom_col(show.legend = FALSE) +
   xlab(NULL) +
-  coord_flip()
+  coord_flip()+
+  theme(legend.position="none")
 ggplotly(n)
 ```
+ora vedremo di togliere alcune delle parole meno importanti e vedere cosa ne esce fuori
    
 ## Wordcloud  
 ```{r most_used_words2, out.height = "100%", out.width = "100%"}
@@ -192,9 +190,6 @@ rio<-Transcripts %>%
     anti_join(stop_words)%>%
   filter(!word %in% c("yeah","hey","ha","mm","hmm","na","uh","um")) %>%
   count(word,sort=TRUE) 
-  # evaluate an R expression in an environment constructed from data
-  #with(wordcloud(word, n, max.words = 100,colors=brewer.pal(8, "Dark2")) )
- 
 w1<- wordcloud2(rio, size = 0.7, shape = 'diamant', color='random-light', backgroundColor="black")
  
  saveWidget(w1, '1.html', selfcontained = F)
@@ -214,7 +209,6 @@ webshot('1.html', '1.png', vwidth=700,vheight=500, delay = 5)
 Tokenized <- Tokenized %>%
   mutate(word = wordStem(word)) # stemming
 
-# plot word frequency
 m<-Tokenized %>%
   count(word, sort = TRUE) %>%
   filter(n > 600) %>%
@@ -222,13 +216,13 @@ m<-Tokenized %>%
   ggplot(aes(word, n, fill = word)) +
    geom_col(show.legend = FALSE) +
   xlab(NULL) +
-  coord_flip()
+  coord_flip()+
+  theme(legend.position="none")
 ggplotly(m)
 ```
-
+Abbiamo utilizzato un metodo per riportare le parole alla propria radice per vedere se cambia qualcosa
 
 ```{r frequency, out.height = "100%", out.width = "100%", include=FALSE}
-#unique(Tokenized$season)
 frequency <- 
  Tokenized %>%   count(character,word) %>%
  group_by(character) %>%
@@ -264,7 +258,6 @@ ggplot(frequency, aes(x = `Jim`, y = `Dwight`)) +
   scale_y_log10(labels = percent_format()) +
   labs(y = "Jim", x = "Dwight") +
   theme_bw()
-# quantify correlation
 cor.test(frequency$Jim,  frequency$Dwight)
 ```
    
@@ -278,7 +271,7 @@ m<-ggplot(frequency, aes(x = `Jim`, y = `Michael`)) +
   labs(y = "Jim", x = "Michael") +
   theme_bw()
 m
-# quantify correlation
+
 cor.test(frequency$Jim,  frequency$Michael)
 ```
 ```{r sentiment, out.height = "100%", out.width = "100%", include=FALSE}
@@ -321,15 +314,15 @@ rock <- tidy_books %>%
   filter(!character %in% c("Roy"))%>%
   arrange(desc(freq))
  
-#tidy_books
+
 rock%>%
-  #count(character,sentiment, sort = TRUE)%>%
  
-#filter(character%in% c("Michael","Dwight","Jim","Andy","Angela","Pam"))%>%
+ 
+
   ggplot(aes(interaction(character,sentiment,sep=':'), freq, fill = character)) +
   geom_col(show.legend = FALSE)+
 coord_flip()
-#fare solo il sentimento con numero piu alto per personaggio
+
 ```
 
 ```{r word_count, out.height = "100%", out.width = "100%", include=FALSE}
@@ -357,9 +350,6 @@ bing_word_counts %>%
 
 ## Differenza nelle 3 librerie per il sentiment analysis  
 ```{r sent_anal_difference, out.height = "100%", out.width = "100%"}
- #mutate(ep_key = paste0("s", season, "e", episode)) %>%
-  #  select(ep_key, episode_name, imdb_rating,season) %>%
-   # unique()
 
 afinn <- Tokenized %>% 
   mutate(ep_key = paste0("s", season, "e", episode)) %>%
@@ -392,7 +382,7 @@ s<-bind_rows(afinn,
   ggplot(aes(ep_key, sentiment, fill = method)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~method, ncol = 1, scales = "free_y")+
-  theme(axis.text.x=element_blank())
+  theme(axis.text.x=element_blank(),legend.position = "none")
    ggplotly(s)
 
 ```
@@ -442,11 +432,11 @@ ris<-Tokenized %>%
                            'lines')) +
   scale_fill_brewer(palette="Dark2") +
   coord_flip(clip='off') + 
-  ggtitle('{closest_state}') +             # title with the timestamp period
+  ggtitle('{closest_state}') +            
   transition_states(season,
                     transition_length = 1,
                     state_length = 1) +
-  exit_fly(x_loc = 0, y_loc = 0) +         # chart exit animation params
+  exit_fly(x_loc = 0, y_loc = 0) +        
   enter_fly(x_loc = 0, y_loc = 0)
   
 anim
@@ -454,7 +444,7 @@ anim
    
 ## La parola piu detta per personaggio togliendo yeah e hey  
 ```{r word_count_stemmed_per_char, out.height = "100%", out.width = "100%"}
-###colori piu distinguibili
+
 book_words <- Transcripts %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words)%>%
@@ -506,8 +496,8 @@ book_words %>%
 ## TF-IDF:term frequency-inverse document frequency  
 
 Identifica le parole importanti per un documento(o personaggio nel nostro caso)in una collezione di documenti.  
-Grazie ad esso riusciamo a vedere le parole piu importanti per i nostri beniamini.  
-(ovviamente Andy parla di tonno)  
+Grazie ad esso riusciamo a vedere le parole piu importanti per i personaggi principali.  
+ 
 ```{r tf_idf_per_char, out.height = "100%", out.width = "100%"}
  g<-book_words %>%
   arrange(desc(tf_idf)) %>%
@@ -523,24 +513,23 @@ Grazie ad esso riusciamo a vedere le parole piu importanti per i nostri beniamin
   geom_col(show.legend = FALSE) +
   labs(x = NULL, y = "tf-idf") +
   facet_wrap(~character, ncol = 3, scales = "free") +
-  coord_flip()
+  coord_flip()+
+  theme(legend.position="none")
 ggplotly(g)
 
 ```
-   
+ (da notare che Andy parla di tonno) 
+ 
 ## Relationship between words  
 E possibile lavorare su gruppi di n parole per poter analizzare meglio il dataset  
 ```{r bigrams, out.height = "100%", out.width = "100%"}
 off_bigrams <- Transcripts %>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>% 
   filter(!is.na(bigram))
-
-
-# count bigrams
 off_bigrams %>%
   count(bigram, sort = TRUE)%>%
   head(10)
-# remove stop words
+
 bigrams_separated <- off_bigrams %>%
   separate(bigram, c("word1", "word2"), sep = " ")
 
@@ -551,7 +540,6 @@ filter(!word1 %in% c("yeah","hey","ha","mm","hmm","na","uh")) %>%
   filter(!word2 %in% c("yeah","hey","ha","mm","hmm","na","uh"))%>%
   filter(word1 != word2)
 
-# new bigram counts
 bigram_counts <- bigrams_filtered %>% 
   count(word1, word2, sort = TRUE)
 
@@ -560,14 +548,12 @@ bigram_counts <- bigrams_filtered %>%
    
 ## Coppie di parole piu dette  
 ```{r most_used_bigrams, out.height = "100%", out.width = "100%"}
-# back to bigrams
+
 bigrams_united <- bigrams_filtered %>%
   unite(bigram, word1, word2, sep = " ")
 
  dio <-bigrams_united %>% 
   count(bigram, sort = TRUE) 
-  # evaluate an R expression in an environment constructed from data
- # with(wordcloud(bigram, n, max.words = 70,random.order = FALSE, colors=brewer.pal(8, "Dark2")))
  w2<-wordcloud2(dio, size = 1.2, shape = 'pentagon', color='random-light', backgroundColor="black")
   
  saveWidget(w2, '2.html', selfcontained = F)
@@ -597,7 +583,7 @@ filter(!word3 %in% c("yeah","hey","ha","whoa","la","na","ah","ho"))%>%
 trigrams_count <- trigrams_filtered %>%
   count(word1, word2, word3, sort = TRUE)
 
-#trigrams_count
+
 
 
 ```
@@ -612,9 +598,6 @@ trigrams_united<- trigrams_filtered %>%
 
 zio<-trigrams_united %>% 
   count(trigram, sort = TRUE) 
-  # evaluate an R expression in an environment constructed from data
- # with(wordcloud(trigram, n, max.words = 100,random.order = FALSE, colors=brewer.pal(8, "Dark2")))
-
 w3<- wordcloud2(zio, size = 0.5, shape = 'diamond', color='random-light', backgroundColor="black")
  saveWidget(w3, '3.html', selfcontained = F)
 webshot('3.html', '3.png', vwidth=700,vheight=500, delay = 5)
@@ -626,9 +609,10 @@ webshot('3.html', '3.png', vwidth=700,vheight=500, delay = 5)
 ```{r bigrams_tf_idf, out.height = "100%", out.width = "100%", include=FALSE}
 bigram_tf_idf <- bigrams_united %>%
   count(character, bigram) %>%
-  filter(character %in% c("Michael","Jim","Dwight","Pam","Andy","Erin"))%>%
+  filter(character %in% c("Michael","Dwight","Jim","Andy","Angela","Pam","Oscar","Phyllis","Ryan","Kevin","Toby","Derryl"))%>%
   bind_tf_idf(bigram, character, n) %>%
   arrange(desc(tf_idf))
+
 ```
 
 
@@ -639,25 +623,24 @@ bigram_tf_idf %>%
   arrange(desc(tf_idf)) %>%
   group_by(character) %>%
   
-   slice(1:8)%>%
+   slice(1:3)%>%
   ungroup() %>%
   mutate(bigram = reorder(bigram, tf_idf)) %>%
   ggplot(aes(bigram, tf_idf, fill = character)) +
   geom_col(show.legend = FALSE) +
-  facet_wrap(~ character, ncol = 2, scales = "free") +
+  facet_wrap(~ character, ncol = 3, scales = "free") +
   coord_flip() +
   labs(y = "tf-idf of bigram to character",
        x = "")
 ```
 
 Si vede che al nostro caro Andy piace come nickname  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/nard-dog.jpg)
+![](./images/nard-dog.jpg)
 
 ## Quante volte viene detto "that's what she said"? 
 
 ```{r thats_what_she_said, out.height = "100%", out.width = "100%"}
 
-###heeelp
 number<-sum(str_count(Transcripts$text, "that's what he said"))+
 sum(str_count(Transcripts$text, "that's what she said"))+
 sum(str_count(Transcripts$text, "That's what she said"))+
@@ -669,12 +652,12 @@ sum(str_count(Transcripts$text, "That's what he said"))+
 sum(str_count(Transcripts$text, "thats what he said"))+
 sum(str_count(Transcripts$text, "Thats what he said"))+
 sum(str_count(Transcripts$text, "THATS WHAT HE SAID"))
-#sprintf("durante il corso della serie viene detto %i volte", number)
+
 
 ```
 Durante il corso dell'intera serie viene detto  __`r number`__ volte  
 
-  ![](C:/Users/Aleks/Desktop/uni/data science/the office/images/she_said.jpg)
+  ![](./images/she_said.jpg)
    
 ## Coppie di parole piu dette per stagione  
 ```{r most_used_bigrams_per_season, out.height = "100%", out.width = "100%"}
@@ -727,7 +710,8 @@ f<-not_words %>%
   geom_col(show.legend = FALSE) +
   xlab("Words preceded by \"not\"") +
   ylab("Sentiment value * number of occurrences") +
-  coord_flip()
+  coord_flip()+
+  theme(legend.position = "none")
 ggplotly(f)
 ```
    
@@ -737,13 +721,8 @@ bigram_graph <- bigram_counts %>%
   filter(n >9) %>% 
   as_tbl_graph()
 
-
-
-
-# arrows
 a <- grid::arrow(type = "closed", length = unit(.1, "inches"))
 
-# plot the graph
 ggraph(bigram_graph, layout = "fr") +
   geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
                  arrow = a, end_cap = circle(.05, 'inches')) +
@@ -752,29 +731,24 @@ ggraph(bigram_graph, layout = "fr") +
   theme_void()
 ```
 ```{r words_per_section, out.height = "100%", out.width = "100%", include=FALSE}
-# separate words in sections (10 lines)
+
 off_section_words <- Transcripts %>%
- # filter(season == "1") %>%
   mutate(section = row_number() %/% 10) %>%
   filter(section > 0) %>%
   unnest_tokens(word, text) %>%
   filter(!(word %in% stop_words$word))
 ```
 ```{r co-occuring_words_in_sections, out.height = "100%", out.width = "100%", include=FALSE}
-# count words co-occuring within sections
 word_pairs <- off_section_words %>%
   pairwise_count(word, section, sort = TRUE)
 
 ```
 ```{r fltered_co-occuring_words, out.height = "100%", out.width = "100%", include=FALSE}
-# we need to filter for at least relatively common words first
 word_cors <- off_section_words %>%
   group_by(word) %>%
   filter(n() >= 20) %>%
   pairwise_cor(word, section, sort = TRUE)
 
-#word_cors %>%
- # filter(item1 == c("um","yeah","uh","hey","mm"))
 ```
    
 ## Parole che si trovano spesso assieme  
@@ -800,12 +774,10 @@ episode_words <- Transcripts %>%
 	filter(!(word %in% c("yeah", "uh", "huh", "hey", "ah")))%>%
   filter(word %in% en_swearwords$word)%>%
    group_by(character) %>% 
-  # Get total count by sentiment
+
    count(word) %>% 
  arrange(n)
   
-
-
 episode_words %>%
   arrange(desc(n)) %>%
   group_by(character) %>%
@@ -834,8 +806,6 @@ episode_words <- Transcripts %>%
   select(season,episode,character,word,total)%>%
   arrange(desc(total))%>%
    semi_join(en_swearwords) %>%
-  #filter(word %in% en_swearwords) %>%
-  #mutate(swear_words=n())%>%
   mutate(swear_words = n())%>%
   mutate(freq = round(swear_words / total, 3)) %>%
  
@@ -848,34 +818,15 @@ episode_words
 
  
 ```
-Gara d'insulti vinta da Dwight!!  
-![](C:/Users/Aleks/Desktop/uni/data science/the office/images/Dwight_girl.jpg)
+Il personaggio piu scurrile e Dwight seguito da Michael 
+![](./images/Dwight_girl.jpg)
    
-## Popolarita in relazione ai vari episodi
-  
-```{r ratings, out.height = "100%", out.width = "100%"}
-lol <-Transcripts%>%
- mutate(ep_key = paste0("s", season, "e", episode)) %>%
-    select(ep_key, episode_name, imdb_rating,season) %>%
-    unique()
 
-p<-ggplot(lol, aes(ep_key, imdb_rating,color=season)) +
-    geom_point() +
-   #stat_smooth(geom = "smooth", method = "lm", se = FALSE)+
-  geom_smooth() +### perche geom smooth non va?
-
-  scale_colour_gradientn(colours = c("darkred", "orange", "yellow","brown","green","darkblue","purple","pink","blue"))   + 
-  theme(axis.text.x=element_blank())
-
-ggplotly(p)
-```
-Notiamo che dopo meta serie i voti iniziano a calare in media, ma in generale il rating rimane alto
 
 
 
 # Grazie!
 ![](C:/Users/Aleks/Desktop/uni/data science/the office/images/finale.jpg)
-
 
 
 
